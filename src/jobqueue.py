@@ -73,8 +73,6 @@ def execute_command(cmd, jobname, jobid, working_dir):
     print "  * command: [{}]".format(str(cmd))
     print "  * working directory: [{}]".format( working_dir )
     ofile = os.path.join(working_dir, "{}.o{}".format(jobname, jobid))
-    with open(os.path.join(dirname, "trashes.txt"), "a") as fout:
-        fout.write("{}\n".format( os.path.abspath( ofile ) ))
     with open(ofile, "w") as fout:
         fout.write("CMD: {}\n".format(str(cmd)))
         try:
@@ -100,6 +98,8 @@ def execute_command(cmd, jobname, jobid, working_dir):
             sql.execute("delete from jobqueue where id=?", (jobid, ))
             sql.commit()
             sql.close()
+            with open(os.path.join(dirname, "trashes.txt"), "a") as fout:
+                fout.write("{}\n".format( os.path.abspath( ofile ) ))
 
         ret_code = process.returncode
         if ret_code == 0:
@@ -114,8 +114,6 @@ def execute_wait(pid, jobname, jobid, working_dir):
     print "  * command: [wait {}]".format(pid)
     print "  * working directory: [{}]".format( working_dir )
     ofile = os.path.join(working_dir, "{}.o{}".format(jobname, jobid))
-    with open(os.path.join(dirname, "trashes.txt"), "a") as fout:
-        fout.write("{}\n".format(os.path.abspath( ofile )))
     with open(ofile, "w") as fout:
         fout.write("CMD: wait {}\n".format(pid))
         try:
@@ -126,16 +124,15 @@ def execute_wait(pid, jobname, jobid, working_dir):
             sql.commit()
             sql.close()
             print "job done"
-            sql = Sqlite()
-            sql.execute("delete from jobqueue where id = ?", (jobid, ))
-            sql.commit()
-            sql.close()
         except KeyboardInterrupt:
             print "job [{}: {}] killed: [wait {}]".format(jobid, jobname, pid)
+        finally:
             sql = Sqlite()
             sql.execute("delete from jobqueue where id = ?", (jobid, ))
             sql.commit()
             sql.close()
+            with open(os.path.join(dirname, "trashes.txt"), "a") as fout:
+                fout.write("{}\n".format(os.path.abspath( ofile )))
     print "================================================================================"
     print
 
