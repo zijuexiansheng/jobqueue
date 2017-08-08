@@ -116,13 +116,16 @@ def execute_wait(pid, jobname, jobid, working_dir):
             while is_running(pid):
                 time.sleep(.25)
             sql = Sqlite()
-            sql.execute("update jobqueue set status = 'running' where id = ?", (jobid, ))
+            sql.execute("update jobqueue set status = 'running', pid = ? where id = ?", (os.getpid(), jobid))
             sql.commit()
             sql.close()
             print "job done"
+            sql = Sqlite()
+            sql.execute("delete from jobqueue where id = ?", (jobid, ))
+            sql.commit()
+            sql.close()
         except KeyboardInterrupt:
             print "job [{}: {}] killed: [wait {}]".format(jobid, jobname, pid)
-        finally:
             sql = Sqlite()
             sql.execute("delete from jobqueue where id = ?", (jobid, ))
             sql.commit()
@@ -152,7 +155,7 @@ def jobqueue_execute( sql ):
         res = sql.fetchone()
         sql.close()
         if res == None:
-            return
+            break
     
 
 def jobqueue_add(args):
@@ -185,9 +188,9 @@ def jobqueue_delete(args):
         if args.force:
             if res[2] =='normal':
                 os.kill( int(res[0]), signal.SIGKILL )
-                sql.execute("delete from jobqueue where id = ?", (args.ID, ))
             else:
-                print "[WARNING]: job [{}] is a waiting job, and cannot be killed".format( args.ID )
+                os.kill( int(res[0]), signal.SIGINT )
+            sql.execute("delete from jobqueue where id = ?", (args.ID, ))
         else:
             print "The job is running and cannot be deleted"
     sql.commit()
@@ -197,12 +200,13 @@ def jobqueue_clear(args):
     sql = Sqlite()
     sql.execute("delete from jobqueue where status <> 'running'")
     sql.execute("select pid, status, jobtype, id from jobqueue")
+    pid = None
     if args.force:
         for row in sql.fetchall():
             if row[2] == 'normal':
                 os.kill( int(row[0]), signal.SIGKILL )
             else:
-                print "[WARNING]: job [{}] is a waiting job and cannot be killed".format( row[3] )
+                os.kill( int(row[0]), signal.SIGINT )
         sql.execute("delete from jobqueue")
     else:
         print "Warning: there are probably still jobs running, please check them!"

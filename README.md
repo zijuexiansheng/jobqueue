@@ -17,6 +17,3 @@ If you want parallel jobs with dependencies, Makefile would be a much better cho
 
 * `jobqueue -h`
 
-# Known issues
-
-* All the running jobs can be killed except the `wait` type running jobs. Please kill it manually by `ctrl-C`
