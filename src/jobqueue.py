@@ -72,7 +72,10 @@ def execute_command(cmd, jobname, jobid, working_dir):
     print "Start executing job [{}:{}]:".format(jobid, jobname)
     print "  * command: [{}]".format(str(cmd))
     print "  * working directory: [{}]".format( working_dir )
-    with open(os.path.join(working_dir, "{}.o{}".format(jobname, jobid)), "w") as fout:
+    ofile = os.path.join(working_dir, "{}.o{}".format(jobname, jobid))
+    with open(os.path.join(dirname, "trashes.txt"), "a") as fout:
+        fout.write("{}\n".format( os.path.abspath( ofile ) ))
+    with open(ofile, "w") as fout:
         fout.write("CMD: {}\n".format(str(cmd)))
         try:
             process = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=fout, cwd=working_dir)
@@ -110,7 +113,10 @@ def execute_wait(pid, jobname, jobid, working_dir):
     print "Start executing job [{}:{}]:".format(jobid, jobname)
     print "  * command: [wait {}]".format(pid)
     print "  * working directory: [{}]".format( working_dir )
-    with open(os.path.join(working_dir, "{}.o{}".format(jobname, jobid)), "w") as fout:
+    ofile = os.path.join(working_dir, "{}.o{}".format(jobname, jobid))
+    with open(os.path.join(dirname, "trashes.txt"), "a") as fout:
+        fout.write("{}\n".format(os.path.abspath( ofile )))
+    with open(ofile, "w") as fout:
         fout.write("CMD: wait {}\n".format(pid))
         try:
             while is_running(pid):
@@ -224,6 +230,28 @@ def jobqueue_recreate(args):
     sql.create_table()
     sql.close()
 
+def remove_file(fname):
+    fname = fname.strip()
+    if fname == "": return
+    try:
+        os.remove(fname)
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            print "[ERROR]: Cannot remove file [{}]:".format( fname ), e
+
+def jobqueue_rmtrash(args):
+    trash_file = os.path.join(dirname, "trashes.txt")
+    try:
+        with open(trash_file, "r") as fin:
+            for line in fin:
+                remove_file( line )
+    except IOError as e:
+        if e.errno == errno.ENOENT:
+            return
+        else:
+            raise
+    remove_file( trash_file )
+
 def jobqueue_wait( args ):
     sql = Sqlite()
     sql.execute("insert into jobqueue values(NULL, NULL, ?, ?, 'waiting', ?, 'wait')", (args.directory, json.dumps(args.pid), args.name))
@@ -252,6 +280,7 @@ def parse_args():
 
     parser_create = subparsers.add_parser("create", help="Create table for database")
     parser_recreate = subparsers.add_parser("recreate", help="Delete the original table and create a new one")
+    parser_clean = subparsers.add_parser("rmtrash", help="clean all the output files")
 
     parser_wait = subparsers.add_parser("wait", help="Wait for a PID")
     parser_wait.add_argument("pid", type=int, help="PID")
@@ -269,6 +298,7 @@ def main():
                    "clear":     jobqueue_clear,
                    "create":    jobqueue_create,
                    "recreate":  jobqueue_recreate,
+                   "rmtrash":   jobqueue_rmtrash,
                    "wait":      jobqueue_wait
                 }
     try:
